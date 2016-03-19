@@ -1,6 +1,6 @@
 ## Backup Manager
 
-App for managing Backups
+Backup Manager App Based on Frappe
 
 #### License
 
