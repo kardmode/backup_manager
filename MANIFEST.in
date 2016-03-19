@@ -1,0 +1,18 @@
+include MANIFEST.in
+include requirements.txt
+include *.json
+include *.md
+include *.py
+include *.txt
+recursive-include backup_manager *.css
+recursive-include backup_manager *.csv
+recursive-include backup_manager *.html
+recursive-include backup_manager *.ico
+recursive-include backup_manager *.js
+recursive-include backup_manager *.json
+recursive-include backup_manager *.md
+recursive-include backup_manager *.png
+recursive-include backup_manager *.py
+recursive-include backup_manager *.svg
+recursive-include backup_manager *.txt
+recursive-exclude backup_manager *.pyc
