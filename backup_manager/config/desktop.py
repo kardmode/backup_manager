@@ -5,8 +5,8 @@ from frappe import _
 def get_data():
 	return {
 		"Backup Manager": {
-			"color": "grey",
-			"icon": "octicon octicon-file-directory",
+			"color": "#800000",
+			"icon": "octicon octicon-dashboard",
 			"type": "module",
 			"label": _("Backup Manager")
 		}

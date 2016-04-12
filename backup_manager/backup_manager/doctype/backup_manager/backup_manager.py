@@ -55,7 +55,7 @@ def take_backups():
 	try:
 		did_not_upload, error_log = backup_to_service()
 		if did_not_upload: raise Exception
-		send_email(True, "Backup")
+		#send_email(True, "Backup")
 	except Exception:
 		file_and_error = [" - ".join(f) for f in zip(did_not_upload, error_log)]
 		error_message = ("\n".join(file_and_error) + "\n" + frappe.get_traceback())
@@ -98,27 +98,27 @@ def backup_to_service():
 	if not frappe.db:
 		frappe.connect()
 
-
+	older_than = cint(frappe.db.get_value('Backup Manager', None, 'older_than'))
 	if cint(frappe.db.get_value("Backup Manager", None, "enable_database")):
 		# upload database
 		backup = new_backup(ignore_files=True)
 		# filename = os.path.join(get_backups_path(), os.path.basename(backup.backup_path_db))
-		sync_folder(get_backups_path(), "database")
+		sync_folder(older_than,get_backups_path(), "database")
 
 	BASE_DIR = os.path.join( get_backups_path(), '../file_backups' )
 
 	if cint(frappe.db.get_value("Backup Manager", None, "enable_files")):
 		Backup_DIR = os.path.join(BASE_DIR, "files")
 		compress_files(get_files_path(), Backup_DIR)
-		sync_folder(Backup_DIR, "files")
+		sync_folder(older_than,Backup_DIR, "files")
 
 	
 	if cint(frappe.db.get_value("Backup Manager", None, "enable_private_files")):
 		Backup_DIR = os.path.join(BASE_DIR, "private/files")
 		compress_files(get_files_path(is_private=1), Backup_DIR)
-		sync_folder(Backup_DIR, "private/files")
+		sync_folder(older_than,Backup_DIR, "private/files")
 		
-	
+	frappe.db.close()
 	return did_not_upload, list(set(error_log))
 
 def compress_files(file_DIR, Backup_DIR):
@@ -131,13 +131,14 @@ def compress_files(file_DIR, Backup_DIR):
 	make_archive(archivepath,'zip',file_DIR)
 
 	
-def sync_folder(sourcepath, destfolder):
+def sync_folder(older_than,sourcepath, destfolder):
 	destpath = "gdrive:" + destfolder
-	delete_temp_backups(96,sourcepath)
+	
+	delete_temp_backups(older_than,sourcepath)
 	cmd_string = "rclone sync " + sourcepath + " " + destpath		
 	err, out = frappe.utils.execute_in_shell(cmd_string)
 
-def upload_file_to_service(filename, folder, compress):
+def upload_file_to_service(older_than,filename, folder, compress):
 
 	if not os.path.exists(filename):
 			return
@@ -150,7 +151,7 @@ def upload_file_to_service(filename, folder, compress):
 		archivename = datetime.today().strftime("%d%m%Y_%H%M%S")+'_files'
 		archivepath = os.path.join(Backup_DIR,archivename)
 		
-		delete_temp_backups(96,Backup_DIR)
+		delete_temp_backups(older_than,Backup_DIR)
 
 		filename = make_archive(archivepath,'zip',filename)
 
