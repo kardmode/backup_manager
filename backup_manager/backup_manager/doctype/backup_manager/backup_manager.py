@@ -47,14 +47,16 @@ def take_backups_if(freq):
 
 @frappe.whitelist()
 def take_backups():
-	frappe.db.begin()
-	frappe.db.set_value('Backup Manager', 'Backup Manager', 'last_backup_date', datetime.now())
-	frappe.db.commit()
-
+	
 	did_not_upload, error_log = [], []
 	try:
 		did_not_upload, error_log = backup_to_service()
 		if did_not_upload: raise Exception
+		
+		frappe.db.begin()
+		frappe.db.set_value('Backup Manager', 'Backup Manager', 'last_backup_date', datetime.now())
+		frappe.db.commit()
+
 		#send_email(True, "Backup")
 	except Exception:
 		file_and_error = [" - ".join(f) for f in zip(did_not_upload, error_log)]
@@ -97,7 +99,7 @@ def backup_to_service():
 	
 	if not frappe.db:
 		frappe.connect()
-
+	
 	older_than = cint(frappe.db.get_value('Backup Manager', None, 'older_than'))
 	if cint(frappe.db.get_value("Backup Manager", None, "enable_database")):
 		# upload database
@@ -132,10 +134,11 @@ def compress_files(file_DIR, Backup_DIR):
 
 	
 def sync_folder(older_than,sourcepath, destfolder):
-	destpath = "gdrive:" + destfolder
+	destpath = "gdrive:" + destfolder + " --drive-use-trash"
 	
 	delete_temp_backups(older_than,sourcepath)
-	cmd_string = "rclone sync " + sourcepath + " " + destpath		
+	cmd_string = "rclone sync " + sourcepath + " " + destpath
+	frappe.errprint(cmd_string)
 	err, out = frappe.utils.execute_in_shell(cmd_string)
 
 def upload_file_to_service(older_than,filename, folder, compress):
@@ -161,7 +164,7 @@ def upload_file_to_service(older_than,filename, folder, compress):
 		if os.path.isdir(filename):
 			sourcepath = filename + "/"
 
-		destpath = "gdrive:" + folder
+		destpath = "gdrive:" + folder + " --drive-use-trash"
 		
 		# cmd_string = "rclone --min-age 2d delete " + destpath		
 		# err, out = frappe.utils.execute_in_shell(cmd_string)
