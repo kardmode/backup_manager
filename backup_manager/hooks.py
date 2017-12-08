@@ -89,11 +89,13 @@ scheduler_events = {
  		"backup_manager.backup_manager.doctype.backup_manager.backup_manager.take_backups_hourly"
 	],
  	"weekly": [
- 		"backup_manager.backup_manager.doctype.backup_manager.backup_manager.take_backups_weekly"
- 	]
-# 	"monthly": [
-# 		"backup_manager.tasks.monthly"
-# 	]
+ 		"backup_manager.backup_manager.doctype.backup_manager.backup_manager.take_backups_weekly",
+		"backup_manager.backup_manager.doctype.scheduled_job.scheduled_job.run_jobs_weekly"
+ 	],
+	"monthly": [
+		# "backup_manager.tasks.monthly",
+		"backup_manager.backup_manager.doctype.scheduled_job.scheduled_job.run_jobs_monthly"
+	]
 	# "daily_long": [
 		# "backup_manager.backup_manager.doctype.backup_manager.backup_manager.take_backups_daily"
 	# ],

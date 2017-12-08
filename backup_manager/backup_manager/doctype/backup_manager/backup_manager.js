@@ -3,6 +3,8 @@ $.extend(cur_frm.cscript, {
 		cur_frm.fields_dict.manual_backup.$input.addClass("btn-primary");
 	},
 	
+
+	
 	validate_send_notifications_to: function() {
 		if(!cur_frm.doc.send_notifications_to) {
 			msgprint(__("Please specify") + ": " +
@@ -18,23 +20,19 @@ $.extend(cur_frm.cscript, {
 
 
 cur_frm.cscript.manual_backup = function(doc,cdt,cdn){
-	msgprint(__("Performing Backup"));
+	
 	
 	
     if(doc.enable_backup){
-		var callback = function(r, rt){
-			if (r.message)
-			{
-				msgprint(__("Backup Complete"));
-
-			}
-		}
-
-		return $c('runserverobj', args={'method':'take_backupsmethod','docs':doc},callback);
+		frappe.msgprint(__("Performing Backup"));
+		frappe.call({
+			method: "backup_manager.backup_manager.doctype.backup_manager.backup_manager.take_backup",
+			freeze: false
+		})
 		
 
 		
     } else {
-  	  msgprint(__("Backup is not enabled"));
+  	  frappe.msgprint(__("Backup is not enabled"));
     }
 }

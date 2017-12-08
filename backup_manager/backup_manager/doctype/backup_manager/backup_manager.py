@@ -5,6 +5,7 @@
 from __future__ import unicode_literals
 import frappe
 from frappe.model.document import Document
+from frappe.utils.background_jobs import enqueue
 from frappe.utils import cint, split_emails, get_request_site_address, cstr, today,get_backups_path,get_datetime
 from datetime import datetime, timedelta
 
@@ -15,9 +16,8 @@ verbose = 0
 ignore_list = [".DS_Store"]
 
 class BackupManager(Document):
-	def take_backupsmethod(self):
-		if cint(frappe.db.get_value("Backup Manager", None, "enable_backup")):
-			take_backups()
+	def onload(self):
+		pass
 
 def take_backups_hourly():
 	take_backups_if("Hourly")
@@ -32,7 +32,7 @@ def take_backups_if(freq):
 	if cint(frappe.db.get_value("Backup Manager", None, "enable_backup")):
 		upload_frequency = frappe.db.get_value("Backup Manager", None, "upload_frequency")
 		if upload_frequency == freq:
-			take_backups()
+			take_backup()
 		elif freq == "Hourly" and upload_frequency in ["Every 6 Hours","Every 12 Hours"]:
 			last_backup_date = frappe.db.get_value('Backup Manager', None, 'last_backup_date')
 			upload_interval = 12
@@ -42,11 +42,17 @@ def take_backups_if(freq):
 				upload_interval = 12
 		
 			if datetime.now() - get_datetime(last_backup_date) >= timedelta(hours = upload_interval):
-				take_backups()
+				take_backup()
 		
 
 @frappe.whitelist()
-def take_backups():
+def take_backup():
+	# "Enqueue longjob for taking backup to dropbox"
+	# enqueue("backup_manager.backup_manager.doctype.backup_manager.backup_manager.take_backup_to_service", queue='long', timeout=1500)
+	take_backup_to_service()
+	
+
+def take_backup_to_service():
 	
 	did_not_upload, error_log = [], []
 	try:
@@ -63,6 +69,8 @@ def take_backups():
 		error_message = ("\n".join(file_and_error) + "\n" + frappe.get_traceback())
 		frappe.errprint(error_message)
 		send_email(False, "Backup", error_message)
+		
+
 		
 	
 
@@ -101,24 +109,29 @@ def backup_to_service():
 		frappe.connect()
 	
 	older_than = cint(frappe.db.get_value('Backup Manager', None, 'older_than'))
+	cloud_sync = cint(frappe.db.get_value('Backup Manager', None, 'cloud_sync'))
+
 	if cint(frappe.db.get_value("Backup Manager", None, "enable_database")):
 		# upload database
-		backup = new_backup(ignore_files=True)
+		backup = new_backup(older_than,ignore_files=True)
 		# filename = os.path.join(get_backups_path(), os.path.basename(backup.backup_path_db))
-		sync_folder(older_than,get_backups_path(), "database")
+		if cloud_sync:
+			sync_folder(older_than,get_backups_path(), "database",did_not_upload,error_log)
 
 	BASE_DIR = os.path.join( get_backups_path(), '../file_backups' )
 
 	if cint(frappe.db.get_value("Backup Manager", None, "enable_files")):
 		Backup_DIR = os.path.join(BASE_DIR, "files")
 		compress_files(get_files_path(), Backup_DIR)
-		sync_folder(older_than,Backup_DIR, "files")
+		if cloud_sync:
+			sync_folder(older_than,Backup_DIR, "files",did_not_upload,error_log)
 
 	
 	if cint(frappe.db.get_value("Backup Manager", None, "enable_private_files")):
 		Backup_DIR = os.path.join(BASE_DIR, "private/files")
 		compress_files(get_files_path(is_private=1), Backup_DIR)
-		sync_folder(older_than,Backup_DIR, "private/files")
+		if cloud_sync:
+			sync_folder(older_than,Backup_DIR, "private/files",did_not_upload,error_log)
 		
 	frappe.db.close()
 	return did_not_upload, list(set(error_log))
@@ -133,55 +146,33 @@ def compress_files(file_DIR, Backup_DIR):
 	make_archive(archivepath,'zip',file_DIR)
 
 	
-def sync_folder(older_than,sourcepath, destfolder):
-	destpath = "gdrive:" + destfolder + " --drive-use-trash"
+def sync_folder(older_than,sourcepath, destfolder,did_not_upload,error_log):
+	# destpath = "gdrive:" + destfolder + " --drive-use-trash"
+	destpath = "gdrive:" + destfolder
 	
 	delete_temp_backups(older_than,sourcepath)
 	cmd_string = "rclone sync " + sourcepath + " " + destpath
 	frappe.errprint(cmd_string)
-	err, out = frappe.utils.execute_in_shell(cmd_string)
-
-def upload_file_to_service(older_than,filename, folder, compress):
-
-	if not os.path.exists(filename):
-			return
-			
-	if compress:
-		from shutil import make_archive	
-		BASE_DIR = os.path.join( get_backups_path(), '../file_backups' )
-		Backup_DIR = os.path.join(BASE_DIR, folder)
-
-		archivename = datetime.today().strftime("%d%m%Y_%H%M%S")+'_files'
-		archivepath = os.path.join(Backup_DIR,archivename)
-		
-		delete_temp_backups(older_than,Backup_DIR)
-
-		filename = make_archive(archivepath,'zip',filename)
-
-	if os.path.exists(filename):	
-		sourcepath = filename
-
-		if os.path.isdir(filename):
-			sourcepath = filename + "/"
-
-		destpath = "gdrive:" + folder + " --drive-use-trash"
-		
-		# cmd_string = "rclone --min-age 2d delete " + destpath		
-		# err, out = frappe.utils.execute_in_shell(cmd_string)
-		
-		cmd_string = "rclone copy " + sourcepath + " " + destpath		
+	
+	try:
 		err, out = frappe.utils.execute_in_shell(cmd_string)
+		if err: raise Exception
+	except Exception:
+		frappe.errprint(err)
+
 		
 		 
 def delete_temp_backups(older_than, path):
 	"""
-		Cleans up the backup_link_path directory by deleting files older than 24 hours
+		Cleans up the backup_link_path directory by deleting files older than x hours
 	"""
 	file_list = os.listdir(path)
 	for this_file in file_list:
 		this_file_path = os.path.join(path, this_file)
 		if is_file_old(this_file_path, older_than):
 			os.remove(this_file_path)
+			
+			
 
 def is_file_old(db_file_name, older_than=24):
 		"""
@@ -204,6 +195,30 @@ def is_file_old(db_file_name, older_than=24):
 		else:
 			if verbose: print "File does not exist"
 			return True
+			
+def cleanup_old_backups(site_path, files, limit):
+	backup_paths = []
+	for f in files:
+		if f.endswith('sql.gz'):
+			_path = os.path.abspath(os.path.join(site_path, f))
+			backup_paths.append(_path)
+
+	backup_paths = sorted(backup_paths, key=os.path.getctime)
+	files_to_delete = len(backup_paths) - limit
+
+	for idx in range(0, files_to_delete):
+		f = os.path.basename(backup_paths[idx])
+		files.remove(f)
+
+		os.remove(backup_paths[idx])
+
+def delete_downloadable_backups():
+	path = get_site_path('private', 'backups')
+	files = [x for x in os.listdir(path) if os.path.isfile(os.path.join(path, x))]
+	backup_limit = get_scheduled_backup_limit()
+
+	if len(files) > backup_limit:
+		cleanup_old_backups(path, files, backup_limit)
 			
 if __name__=="__main__":
 	backup_to_service()
