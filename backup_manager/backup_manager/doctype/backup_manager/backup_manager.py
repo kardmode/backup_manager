@@ -6,7 +6,7 @@ from __future__ import unicode_literals
 import frappe
 from frappe.model.document import Document
 from frappe.utils.background_jobs import enqueue
-from frappe.utils import cint, split_emails, get_request_site_address, cstr, today,get_backups_path,get_datetime
+from frappe.utils import cint, split_emails, get_site_base_path, cstr, today,get_backups_path,get_datetime
 from datetime import datetime, timedelta
 
 import os
@@ -48,8 +48,9 @@ def take_backups_if(freq):
 @frappe.whitelist()
 def take_backup():
 	# "Enqueue longjob for taking backup to dropbox"
-	# enqueue("backup_manager.backup_manager.doctype.backup_manager.backup_manager.take_backup_to_service", queue='long', timeout=1500)
-	take_backup_to_service()
+	enqueue("backup_manager.backup_manager.doctype.backup_manager.backup_manager.take_backup_to_service", queue='short', timeout=1500)
+	# take_backup_to_service()
+	return
 	
 
 def take_backup_to_service():
@@ -67,7 +68,7 @@ def take_backup_to_service():
 	except Exception:
 		file_and_error = [" - ".join(f) for f in zip(did_not_upload, error_log)]
 		error_message = ("\n".join(file_and_error) + "\n" + frappe.get_traceback())
-		frappe.errprint(error_message)
+		# frappe.errprint(error_message)
 		send_email(False, "Backup", error_message)
 		
 
@@ -111,12 +112,13 @@ def backup_to_service():
 	older_than = cint(frappe.db.get_value('Backup Manager', None, 'older_than'))
 	cloud_sync = cint(frappe.db.get_value('Backup Manager', None, 'cloud_sync'))
 
+	site = frappe.db.get_value('Global Defaults', None, 'default_company')
 	if cint(frappe.db.get_value("Backup Manager", None, "enable_database")):
 		# upload database
 		backup = new_backup(older_than,ignore_files=True)
 		# filename = os.path.join(get_backups_path(), os.path.basename(backup.backup_path_db))
 		if cloud_sync:
-			sync_folder(older_than,get_backups_path(), "database",did_not_upload,error_log)
+			sync_folder(site,older_than,get_backups_path(), "database",did_not_upload,error_log)
 
 	BASE_DIR = os.path.join( get_backups_path(), '../file_backups' )
 
@@ -124,16 +126,17 @@ def backup_to_service():
 		Backup_DIR = os.path.join(BASE_DIR, "files")
 		compress_files(get_files_path(), Backup_DIR)
 		if cloud_sync:
-			sync_folder(older_than,Backup_DIR, "files",did_not_upload,error_log)
+			sync_folder(site,older_than,Backup_DIR, "public-files",did_not_upload,error_log)
 
 	
 	if cint(frappe.db.get_value("Backup Manager", None, "enable_private_files")):
 		Backup_DIR = os.path.join(BASE_DIR, "private/files")
 		compress_files(get_files_path(is_private=1), Backup_DIR)
 		if cloud_sync:
-			sync_folder(older_than,Backup_DIR, "private/files",did_not_upload,error_log)
+			sync_folder(site,older_than,Backup_DIR, "private-files",did_not_upload,error_log)
 		
 	frappe.db.close()
+	# frappe.connect()
 	return did_not_upload, list(set(error_log))
 
 def compress_files(file_DIR, Backup_DIR):
@@ -146,19 +149,22 @@ def compress_files(file_DIR, Backup_DIR):
 	make_archive(archivepath,'zip',file_DIR)
 
 	
-def sync_folder(older_than,sourcepath, destfolder,did_not_upload,error_log):
+def sync_folder(site,older_than,sourcepath, destfolder,did_not_upload,error_log):
 	# destpath = "gdrive:" + destfolder + " --drive-use-trash"
-	destpath = "gdrive:" + destfolder
+	final_dest = str(site) + "/" + destfolder
+	final_dest = final_dest.replace(" ", "_")
+	destpath = "gdrive:"+ final_dest
 	
+
 	delete_temp_backups(older_than,sourcepath)
 	cmd_string = "rclone sync " + sourcepath + " " + destpath
-	frappe.errprint(cmd_string)
-	
+	# frappe.errprint(cmd_string)
 	try:
 		err, out = frappe.utils.execute_in_shell(cmd_string)
 		if err: raise Exception
 	except Exception:
-		frappe.errprint(err)
+		did_not_upload  = True
+		error_log.append(Exception)
 
 		
 		 
