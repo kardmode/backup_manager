@@ -131,7 +131,7 @@ def backup_to_service():
 	
 	if cint(frappe.db.get_value("Backup Manager", None, "enable_private_files")):
 		Backup_DIR = os.path.join(BASE_DIR, "private/files")
-		compress_files(get_files_path(is_private=1), Backup_DIR)
+		compress_files(get_files_path(is_private=1), Backup_DIR,"private")
 		if cloud_sync:
 			sync_folder(site,older_than,Backup_DIR, "private-files",did_not_upload,error_log)
 		
@@ -139,12 +139,16 @@ def backup_to_service():
 	# frappe.connect()
 	return did_not_upload, list(set(error_log))
 
-def compress_files(file_DIR, Backup_DIR):
+def compress_files(file_DIR, Backup_DIR,custom=None):
 	if not os.path.exists(file_DIR):
 		return
 	
 	from shutil import make_archive	
-	archivename = datetime.today().strftime("%d%m%Y_%H%M%S")+'_files'
+	
+	if custom and custom != " ":
+		archivename = datetime.today().strftime("%d%m%Y_%H%M%S")+'_'+str(custom)+'_files'
+	else:
+		archivename = datetime.today().strftime("%d%m%Y_%H%M%S")+'_files'
 	archivepath = os.path.join(Backup_DIR,archivename)
 	make_archive(archivepath,'zip',file_DIR)
 
@@ -157,7 +161,7 @@ def sync_folder(site,older_than,sourcepath, destfolder,did_not_upload,error_log)
 	
 
 	delete_temp_backups(older_than,sourcepath)
-	cmd_string = "rclone sync " + sourcepath + " " + destpath
+	cmd_string = "rclone copy " + sourcepath + " " + destpath
 	# frappe.errprint(cmd_string)
 	try:
 		err, out = frappe.utils.execute_in_shell(cmd_string)
