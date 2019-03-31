@@ -6,7 +6,7 @@ from __future__ import unicode_literals
 import frappe
 from frappe.model.document import Document
 from frappe.utils.background_jobs import enqueue
-from frappe.utils import cint, split_emails, get_site_base_path, cstr, today,get_backups_path,get_datetime
+from frappe.utils import cint, split_emails, get_site_name,get_site_base_path, cstr, today,get_backups_path,get_datetime
 from datetime import datetime, timedelta
 
 import os
@@ -18,6 +18,12 @@ ignore_list = [".DS_Store"]
 class BackupManager(Document):
 	def onload(self):
 		pass
+		
+	def validate(self):
+		if self.send_notifications_on_error or send_notifications_on_success:
+			if not self.send_notifications_to:
+				frappe.throw(_("Please Enter An Email to Send Notifcations To"))
+
 
 def take_backups_hourly():
 	take_backups_if("Hourly")
@@ -27,6 +33,9 @@ def take_backups_daily():
 
 def take_backups_weekly():
 	take_backups_if("Weekly")
+	
+def take_backups_monthly():
+	take_backups_if("Monthly")
 
 def take_backups_if(freq):
 	if cint(frappe.db.get_value("Backup Manager", None, "enable_backup")):
@@ -48,11 +57,10 @@ def take_backups_if(freq):
 @frappe.whitelist()
 def take_backup():
 	# "Enqueue longjob for taking backup to dropbox"
-	enqueue("backup_manager.backup_manager.doctype.backup_manager.backup_manager.take_backup_to_service", queue='short', timeout=1500)
-	# take_backup_to_service()
+	enqueue("backup_manager.backup_manager.doctype.backup_manager.backup_manager.take_backup_to_service", queue='long', timeout=1500)
 	return
 	
-
+@frappe.whitelist()
 def take_backup_to_service():
 	
 	did_not_upload, error_log = [], []
@@ -63,13 +71,14 @@ def take_backup_to_service():
 		frappe.db.begin()
 		frappe.db.set_value('Backup Manager', 'Backup Manager', 'last_backup_date', datetime.now())
 		frappe.db.commit()
-
-		#send_email(True, "Backup")
+		
+		if cint(frappe.db.get_value("Backup Manager", None, "send_notifications_on_success")):
+			send_email(True, "Backup")
 	except Exception:
 		file_and_error = [" - ".join(f) for f in zip(did_not_upload, error_log)]
 		error_message = ("\n".join(file_and_error) + "\n" + frappe.get_traceback())
-		# frappe.errprint(error_message)
-		send_email(False, "Backup", error_message)
+		if cint(frappe.db.get_value("Backup Manager", None, "send_notifications_on_error")):
+			send_email(False, "Backup", error_message)
 		
 
 		
@@ -95,7 +104,9 @@ def send_email(success, service_name, error_status=None):
 		
 
 	recipients = split_emails(frappe.db.get_value("Backup Manager", None, "send_notifications_to"))
-	frappe.sendmail(recipients=recipients, subject=subject, message=message)
+	
+	if recipients:
+		frappe.sendmail(recipients=recipients, subject=subject, message=message)
 
 
 def backup_to_service():
@@ -109,16 +120,18 @@ def backup_to_service():
 	if not frappe.db:
 		frappe.connect()
 	
-	older_than = cint(frappe.db.get_value('Backup Manager', None, 'older_than'))
+	older_than_hrs = cint(frappe.db.get_value('Backup Manager', None, 'older_than'))
 	cloud_sync = cint(frappe.db.get_value('Backup Manager', None, 'cloud_sync'))
 
-	site = frappe.db.get_value('Global Defaults', None, 'default_company')
+	# site = cstr(frappe.local.site) 
+	site = get_site_base_path()[2:]
+
 	if cint(frappe.db.get_value("Backup Manager", None, "enable_database")):
 		# upload database
-		backup = new_backup(older_than,ignore_files=True)
+		backup = new_backup(older_than_hrs,ignore_files=True)
 		# filename = os.path.join(get_backups_path(), os.path.basename(backup.backup_path_db))
 		if cloud_sync:
-			sync_folder(site,older_than,get_backups_path(), "database",did_not_upload,error_log)
+			sync_folder(site,older_than_hrs,get_backups_path(), "database",did_not_upload,error_log)
 
 	BASE_DIR = os.path.join( get_backups_path(), '../file_backups' )
 
@@ -126,14 +139,14 @@ def backup_to_service():
 		Backup_DIR = os.path.join(BASE_DIR, "files")
 		compress_files(get_files_path(), Backup_DIR)
 		if cloud_sync:
-			sync_folder(site,older_than,Backup_DIR, "public-files",did_not_upload,error_log)
+			sync_folder(site,older_than_hrs,Backup_DIR, "public-files",did_not_upload,error_log)
 
 	
 	if cint(frappe.db.get_value("Backup Manager", None, "enable_private_files")):
 		Backup_DIR = os.path.join(BASE_DIR, "private/files")
 		compress_files(get_files_path(is_private=1), Backup_DIR,"private")
 		if cloud_sync:
-			sync_folder(site,older_than,Backup_DIR, "private-files",did_not_upload,error_log)
+			sync_folder(site,older_than_hrs,Backup_DIR, "private-files",did_not_upload,error_log)
 		
 	frappe.db.close()
 	# frappe.connect()
@@ -153,38 +166,49 @@ def compress_files(file_DIR, Backup_DIR,custom=None):
 	make_archive(archivepath,'zip',file_DIR)
 
 	
-def sync_folder(site,older_than,sourcepath, destfolder,did_not_upload,error_log):
+def sync_folder(site,older_than_hrs,sourcepath, destfolder,did_not_upload,error_log):
 	# destpath = "gdrive:" + destfolder + " --drive-use-trash"
 	final_dest = str(site) + "/" + destfolder
 	final_dest = final_dest.replace(" ", "_")
 	destpath = "gdrive:"+ final_dest
 	
 
-	delete_temp_backups(older_than,sourcepath)
-	cmd_string = "rclone copy " + sourcepath + " " + destpath
-	# frappe.errprint(cmd_string)
+	delete_temp_backups(older_than_hrs,sourcepath)
+	
+	cmd_string = "rclone sync " + sourcepath + " " + destpath
+	
 	try:
 		err, out = frappe.utils.execute_in_shell(cmd_string)
 		if err: raise Exception
 	except Exception:
 		did_not_upload  = True
 		error_log.append(Exception)
+		
+
+	# cmd_string = "rclone --min-age " + str(older_than_hrs) + "h  delete " + destpath
+	
+	# try:
+		# err, out = frappe.utils.execute_in_shell(cmd_string)
+		# if err: raise Exception
+	# except Exception:
+		# did_not_upload  = True
+		# error_log.append(Exception)
 
 		
 		 
-def delete_temp_backups(older_than, path):
+def delete_temp_backups(older_than_hrs, path):
 	"""
 		Cleans up the backup_link_path directory by deleting files older than x hours
 	"""
 	file_list = os.listdir(path)
 	for this_file in file_list:
 		this_file_path = os.path.join(path, this_file)
-		if is_file_old(this_file_path, older_than):
+		if is_file_old(this_file_path, older_than_hrs):
 			os.remove(this_file_path)
 			
 			
 
-def is_file_old(db_file_name, older_than=24):
+def is_file_old(db_file_name, older_than_hrs=24):
 		"""
 			Checks if file exists and is older than specified hours
 			Returns ->
@@ -196,7 +220,7 @@ def is_file_old(db_file_name, older_than=24):
 			#Get timestamp of the file
 			file_datetime = datetime.fromtimestamp\
 						(os.stat(db_file_name).st_ctime)
-			if datetime.today() - file_datetime >= timedelta(hours = older_than):
+			if datetime.today() - file_datetime >= timedelta(hours = older_than_hrs):
 				if verbose: print "File is old"
 				return True
 			else:

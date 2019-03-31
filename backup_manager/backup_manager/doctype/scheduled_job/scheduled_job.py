@@ -8,36 +8,33 @@ from frappe.utils import cstr, cint, flt, getdate,date_diff,get_datetime
 from frappe.model.document import Document
 
 class ScheduledJob(Document):
-	def run_all_jobs(self,freq):
-		if freq == "hourly":
-			run_jobs_hourly()
-		elif freq == "daily":
-			run_jobs_daily()
-		elif freq == "weekly":
-			run_jobs_weekly()
-		elif freq == "monthly":
-			run_jobs_monthly()
+	def run_all_jobs(self):
+		run_jobs_hourly()
+		run_jobs_daily()	
+		run_jobs_weekly()
+		run_jobs_monthly()
+		
 
 def run_jobs_hourly():
 	pass
-
+	
 def run_jobs_daily():
 	pass
 
 def run_jobs_weekly():
-	deactivate_relieved_employees()
+	# "Enqueue longjob"
+	enqueue("backup_manager.backup_manager.doctype.scheduled_job.scheduled_job.deactivate_relieved_employees", queue='long', timeout=1500)
+	return
 
 def run_jobs_monthly():
-	deactivate_relieved_employees()
+	pass
 
-
+@frappe.whitelist()
 def deactivate_relieved_employees():
 	employees = frappe.db.sql("""select name,employee_name,relieving_date from `tabEmployee` where relieving_date IS NOT NULL and status <> %(status)s""", {"status": "Left"}, as_dict=1)	
 
-	
-	
+
 	for emp in employees:
-		frappe.errprint(emp)
 		
 		from datetime import datetime
 		currentDay = datetime.now().day
@@ -50,17 +47,9 @@ def deactivate_relieved_employees():
 		relieving_month = relieving_date.month
 		relieving_year = relieving_date.year
 		
-		# frappe.errprint(relieving_date)
-		# frappe.errprint(relieving_day)
-		# frappe.errprint(relieving_month)
-		# frappe.errprint(relieving_year)
-		
-		# frappe.errprint(currentDay)
-		# frappe.errprint(currentMonth)
-		# frappe.errprint(currentYear)
 		
 		if relieving_year < currentYear:
-			frappe.errprint("change to left - year different")
+			# frappe.errprint("change to left - year different")
 
 			frappe.db.begin()
 			frappe.db.set_value('Employee', emp.name, 'status', 'Left')
@@ -68,13 +57,9 @@ def deactivate_relieved_employees():
 				
 		elif relieving_year == currentYear:
 			if relieving_month < currentMonth:
-				frappe.errprint("change to left - year same")
+				# frappe.errprint("change to left - year same")
 				frappe.db.begin()
 				frappe.db.set_value('Employee', emp.name, 'status', 'Left')
 				frappe.db.commit()
-			else:
-				frappe.errprint("no change-relieving month same or greater")
-		
-	
-	
-	
+			# else:
+				# frappe.errprint("no change-relieving month same or greater")

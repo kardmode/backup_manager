@@ -12,25 +12,19 @@ frappe.ui.form.on('Scheduled Job', {
 		frappe.call({
 			doc: frm.doc,
 			method: "run_all_jobs",
-			freeze: false,
+			freeze: true,
 			args: {
-				freq: frm.doc.frequency,
 			},
 			callback: function(r) {
 				
-				if (r.exc)
+			/* 	if (r.exc)
 				{
 					
 					frappe.msgprint(__("Job Complete"));
-				}
+				} */
 			}
 		}); 
 	
-	
-			
-		
-		
-			
 
 	},
 });
