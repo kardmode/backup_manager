@@ -171,10 +171,7 @@ def sync_folder(site,older_than_hrs,sourcepath, destfolder,did_not_upload,error_
 	final_dest = str(site) + "/" + destfolder
 	final_dest = final_dest.replace(" ", "_")
 	destpath = "gdrive:"+ final_dest
-	
 
-	# delete_temp_backups(older_than_hrs,sourcepath)
-	
 	cmd_string = "rclone sync " + sourcepath + " " + destpath
 	
 	try:
@@ -183,20 +180,11 @@ def sync_folder(site,older_than_hrs,sourcepath, destfolder,did_not_upload,error_
 	except Exception:
 		did_not_upload  = True
 		error_log.append(Exception)
-		
-
-	# cmd_string = "rclone --min-age " + str(older_than_hrs) + "h  delete " + destpath
-	
-	# try:
-		# err, out = frappe.utils.execute_in_shell(cmd_string)
-		# if err: raise Exception
-	# except Exception:
-		# did_not_upload  = True
-		# error_log.append(Exception)
 
 		
 		 
 def delete_temp_backups(older_than_hrs, path):
+
 	"""
 		Cleans up the backup_link_path directory by deleting files older than x hours
 	"""
@@ -229,30 +217,7 @@ def is_file_old(db_file_name, older_than_hrs=24):
 		else:
 			if verbose: print "File does not exist"
 			return True
-			
-def cleanup_old_backups(site_path, files, limit):
-	backup_paths = []
-	for f in files:
-		if f.endswith('sql.gz'):
-			_path = os.path.abspath(os.path.join(site_path, f))
-			backup_paths.append(_path)
 
-	backup_paths = sorted(backup_paths, key=os.path.getctime)
-	files_to_delete = len(backup_paths) - limit
-
-	for idx in range(0, files_to_delete):
-		f = os.path.basename(backup_paths[idx])
-		files.remove(f)
-
-		os.remove(backup_paths[idx])
-
-def delete_downloadable_backups():
-	path = get_site_path('private', 'backups')
-	files = [x for x in os.listdir(path) if os.path.isfile(os.path.join(path, x))]
-	backup_limit = get_scheduled_backup_limit()
-
-	if len(files) > backup_limit:
-		cleanup_old_backups(path, files, backup_limit)
 			
 if __name__=="__main__":
 	backup_to_service()

@@ -27,9 +27,9 @@ cur_frm.cscript.manual_backup = function(doc,cdt,cdn){
 		frappe.msgprint(__("Performing Backup"));
 		frappe.call({
 			method: "backup_manager.backup_manager.doctype.backup_manager.backup_manager.take_backup",
-			freeze: false,
+			freeze: true,
 			callback:function (r) {
-				frappe.errprint(r)
+				//console.log(r)
 			}
 		})
 		
