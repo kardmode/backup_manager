@@ -209,13 +209,13 @@ def is_file_old(db_file_name, older_than_hrs=24):
 			file_datetime = datetime.fromtimestamp\
 						(os.stat(db_file_name).st_ctime)
 			if datetime.today() - file_datetime >= timedelta(hours = older_than_hrs):
-				if verbose: print "File is old"
+				if verbose: print("File is old")
 				return True
 			else:
-				if verbose: print "File is recent"
+				if verbose: print("File is recent")
 				return False
 		else:
-			if verbose: print "File does not exist"
+			if verbose: print("File does not exist")
 			return True
 
 			
