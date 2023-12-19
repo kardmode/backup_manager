@@ -163,7 +163,7 @@ def compress_files(file_DIR, Backup_DIR,prefix=None):
 	else:
 		archivename = datetime.today().strftime("%d%m%Y_%H%M%S")+'_files'
 	archivepath = os.path.join(Backup_DIR,archivename)
-	make_archive(archivepath,'zip',file_DIR)
+	make_archive(archivepath,'tar',file_DIR)
 
 	
 def sync_folder(site,older_than_hrs,sourcepath, destfolder,did_not_upload,error_log):
