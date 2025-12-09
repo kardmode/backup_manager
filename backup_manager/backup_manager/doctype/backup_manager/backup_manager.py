@@ -24,16 +24,19 @@ class BackupManager(Document):
 			if not self.send_notifications_to:
 				frappe.throw(_("Please Enter An Email to Send Notifcations To"))
 
-
+@frappe.whitelist()
 def take_backups_hourly():
 	take_backups_if("Hourly")
 
+@frappe.whitelist()
 def take_backups_daily():
 	take_backups_if("Daily")
-
+	
+@frappe.whitelist()
 def take_backups_weekly():
 	take_backups_if("Weekly")
-	
+
+@frappe.whitelist()
 def take_backups_monthly():
 	take_backups_if("Monthly")
 

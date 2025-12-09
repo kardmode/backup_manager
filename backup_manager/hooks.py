@@ -79,34 +79,17 @@ app_license = "GNU General Public License"
 # ---------------
 
 scheduler_events = {
-	# "all": [
-		# "backup_manager.tasks.all"
-	# ],
-	# "hourly": [
- 		# "backup_manager.backup_manager.doctype.backup_manager.backup_manager.take_backups_hourly"
-	# ],
- 	# "daily": [
-		# "backup_manager.backup_manager.doctype.backup_manager.backup_manager.take_backups_daily"
- 	# ],
- 	# "weekly": [
- 		# "backup_manager.backup_manager.doctype.backup_manager.backup_manager.take_backups_weekly",
-		# "backup_manager.backup_manager.doctype.scheduled_job.scheduled_job.run_jobs_weekly"
- 	# ],
-	# "monthly": [
-		# "backup_manager.tasks.monthly",
-		# "backup_manager.backup_manager.doctype.scheduled_job.scheduled_job.run_jobs_monthly"
-	# ],
 	"hourly_long": [
-		"backup_manager.backup_manager.doctype.scheduled_job.scheduled_job.run_jobs_hourly"
+		"backup_manager.backup_manager.doctype.backup_manager.backup_manager.take_backups_hourly"
 	],
 	"daily_long": [
-		"backup_manager.backup_manager.doctype.scheduled_job.scheduled_job.run_jobs_daily"
+		"backup_manager.backup_manager.doctype.backup_manager.backup_manager.take_backups_daily"
 	],
 	"weekly_long": [
-		"backup_manager.backup_manager.doctype.scheduled_job.scheduled_job.run_jobs_weekly"
+		"backup_manager.backup_manager.doctype.backup_manager.backup_manager.take_backups_weekly"
 	],
 	"monthly_long": [
-		"backup_manager.backup_manager.doctype.scheduled_job.scheduled_job.run_jobs_monthly"
+		"backup_manager.backup_manager.doctype.backup_manager.backup_managertake_backups_monthly"
 	],
 }
 
